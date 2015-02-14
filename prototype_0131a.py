@@ -14,6 +14,20 @@
 def main():
   import cmath
   import pypyodbc
+
+#collect inputs from user
+  numberOfNodes = int(raw_input("number of nodes = "))
+  section = int(raw_input("the section number ="))
+#collect laterals for every section
+  laterals={}
+  for n in range(1,numberOfNodes):
+    lat=int(raw_input("numerOfLaterals in section"+str(n)+'='))
+    laterals['sec'+str(n)]=lat
+#test collected variables
+  print "laterals:", laterals
+  print "number of nodes:", numberOfNodes
+  print "this section is:", section
+                      
   
   def get_resist(conductor_name):
     col1 = 'PosSequenceResistance_PerLUL'
