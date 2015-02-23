@@ -104,17 +104,6 @@ def main():
 
     return dict_load
 
-  def db_lookup(dict_cond_type):
-    #input=conductor type, return= dict_impedance_by_conductor type
-    dict_imped = {}
-    return dict_imped
-
-
-
-  def calc_conductors(dict_imped,dict_cond_leng):
-    #input = the two dictionaries, return = conduction impedance dict by section
-    return dict_cond
-
 
 
   
