@@ -24,6 +24,7 @@ class Conductors():
   def collect_cond_leng(self, number_of_nodes):
       """
       return a dictionary that contains the length of each section
+      unit is feet
       """
       n = 1
       while n <= number_of_nodes+1:
@@ -36,7 +37,7 @@ class Conductors():
   def get_impedance(self, conductor_name):
       """
        return a list of a single tuple in complex number that is the impedance value
-       of the corresponding conductor type
+       of the corresponding conductor type in per 1000 feet unit
       """
       col1 = 'PosSequenceResistance_PerLUL'
       col2 = 'PosSequenceReactance_PerLUL'
@@ -69,7 +70,7 @@ class Conductors():
       n=1
       while n <= number_of_nodes+1:
           var1=self.get_impedance(self.dict_cond_type[n])
-          var2=self.dict_cond_leng[n]
+          var2=self.dict_cond_leng[n]/1000
           var3=var1*var2
           self.dict_cond[n]=var3
           n = n+1
