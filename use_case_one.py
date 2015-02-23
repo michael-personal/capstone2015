@@ -1,19 +1,47 @@
 def main():
 
   import cmath
-  import pprintpp
   import pypyodbc
+  #dict_cond_type={1: '1 AAC', 2: '1 ACSR', 3: '1 AL-CN UG', 4 : '1 AAC', 5: '1 AAC'}
   test = str(raw_input("use sample feeder? enter yes or no: "))
-  class AutoVivification(dict):
-    #Implementation of Perl's autovivification feature
-    def __getitem__(self, item):
-      try:
-        return dict.__getitem__(self, item)
-      except KeyError:
-        value = self[item] = type(self)()
-        return value
+  if test == 'yes':
+    dict_cond_type = {1: '1 AAC', 2: '1ACSR', 3: '1 AL-CN UG'}
+    dict_cond_leng = {1: 100, 2: 200, 3: 300, 4: 400, 5: 500} 
+    dict_cond={1:complex(2.0,2.0),2:complex(3.0,2.0),3:complex(5.0,4.0),4:complex(6.0,4.0),5:complex(10.0,5.0)}
+    #dict_load={1:complex(50.0,5.0),2:complex(75.0,3),3:complex(20.0,1.0),4:complex(75.0,3.0),5:complex(50.0,5.0)}
+    dict_loads_by_lat = {1: [(50+5j)],2: [(75+3j)],3: [(30+1j), (60+2j)],4: [(75+3j)],5: [(50+5j)]}
+    dict_lat = {1:1, 2:1, 3: 2, 4: 1, 5:1}
+    Imain_in=complex(480,-160)
+    Vsource=complex(8002,0)
 
-  def get_resist(conductor_name):
+  else:
+    dict_cond_type = {} #conductor type by node
+    dict_cond_leng = {} #conductor length by section
+    dict_cond ={} #conductor impedance by section
+    dict_lat = {} #number of laterals by node
+    dict_load = {} #load impedance by nodes/loads
+    dict_measure = {} #measurments by node
+    dict_loads_by_lat = {} #impedance by laterals, node1-lat1, node1-lat2, etc
+
+    #a node is where current splits to loads at laterals and continue down the feeder
+    numberOfNodes = int(raw_input("number of nodes = "))
+    #collect conductor type per section
+    n = 1
+    while n <= numberOfNodes+1:
+      var=str(raw_input("the conductor_type of section"+str(n)+"="))
+      dict_cond_type[n]=var
+      n = n+1
+    print "dict_cond_type: ",dict_cond_type
+    
+    #collect conductor lenghth per section
+    n = 1
+    while n <= numberOfNodes+1:
+      var=float(raw_input("the conductor lenghth of section"+str(n)+"="))
+      dict_cond_leng[n]=var
+      n = n+1
+    print "dict_cond_leng: ",dict_cond_leng
+
+    def get_impedance(conductor_name):
     col1 = 'PosSequenceResistance_PerLUL'
     col2 = 'PosSequenceReactance_PerLUL'
     tabl = 'DevConductors'
@@ -33,49 +61,29 @@ def main():
     return a
     cur.close()
     conn.close()
+  #resistance=get_impedance('1/4 X 2 CU')
+  resistance=get_impedance(dict_cond_type[2])
+  print "resistance=",resistance
+  print "type is: ",type(resistance)
 
-  if test == 'yes':
-    dict_cond_type={}
-    dict_cond={1:complex(2.0,2.0),2:complex(3.0,2.0),3:complex(5.0,4.0),4:complex(6.0,4.0),5:complex(10.0,5.0)}
-    #dict_load={1:complex(50.0,5.0),2:complex(75.0,3),3:complex(20.0,1.0),4:complex(75.0,3.0),5:complex(50.0,5.0)}
-    dict_load = {1: [(50+5j)],2: [(75+3j)],3: [(30+1j), (60+2j)],4: [(75+3j)],5: [(50+5j)]}
-    Imain_in=complex(480,-160)
-    Vsource=complex(8002,0)
-
-  else:
-    dict_cond_type = {}
-    dict_cond_leng = {}
-    dict_lat = {}
-    dict_load = {}
-    dict_measure = {}
-    dict_load_lat = {}
-    dict_cond ={}
-
-    #a node is where current splits to loads at laterals and continue down the feeder
-    numberOfNodes = int(raw_input("number of nodes = "))
-    #collect conductor type per section
-    n = 1
+    #build dict_cond from dict_cond_type and dict_cond_length
+    n=1
     while n <= numberOfNodes+1:
-      var=str(raw_input("the conductor_type of section"+str(n)+"="))
-      dict_cond_type[n]=var
+      var1=get_impedance(dict_cond_type[n])
+      var2=dict_cond_leng[n]
+      var3=var1*var2
+      dict_cond[n]=var3
       n = n+1
-    #test content of dict_cond_type
-    pprintpp.pprint(dict_cond_type)
-    #collect conductor lenghth per section
-    n = 1
-    while n <= numberOfNodes+1:
-      var=float(raw_input("the conductor lenghth of section"+str(n)+"="))
-      dict_cond_leng[n]=var
-      n = n+1
-    pprintpp.pprint(dict_cond_leng)
-    #collect number of laterals per node
+    print dict_cond
+
+    #collect number of laterals per node into dict_lat{}
     n = 1
     while n <= numberOfNodes+1:
       var = int(raw_input("the number of laterals in node"+str(n)+"= "))
       dict_lat[n]=var
       n = n+1
-    #test content of dict_lat
-    pprintpp.pprint(dict_lat)
+    #print(dict_lat)
+    
     #collect load info per node
     n = 1
     while n <= numberOfNodes+1:
@@ -86,12 +94,12 @@ def main():
         real=float(raw_input("real part of the impedance on node"+str(n)+"lateral"+str(m)+": " ))
         imagin=float(raw_input("imagin part of the impedance for node"+str(n)+"lateral"+str(m)+": "))
         var.append(complex(real,imagin))
-        dict_load_lat[n] = var
+        dict_loads_by_lat[n] = var
         m = m+1
       n = n+1
-    pprintpp.pprint(dict_load_lat)
+    print(dict_loads_by_lat)
 
-  def calc_load(dict_load_lat):
+  def calc_load(dict_loads_by_lat):
     #return dict_load_by_node
 
     return dict_load
