@@ -1,0 +1,217 @@
+"""
+"""
+import sys
+import numpy as np
+import cmath
+import math
+import xlwt
+
+class Node():
+    '''Node represents a physical node of the feeder.
+    attributes:
+    Voltage - Voltage of node
+    Connection - list of Load objects attached to the node
+    loadsum - the addition of the inverse impedances of all Load objects
+    attached
+    name - the Node number
+    equation - the mathmatical representation of Node derived from
+    kirchoffs current law.'''
+
+    def __init__(self , number):
+        self.connections = list()
+        self.loadsum = 0.0
+        self.name = str(number)
+        self.equation = list()
+        self.voltage = 0
+
+    def get_connections(self , load_list):
+        '''module iterates through load_list and creates a list
+        containing all Load objects connected to Node. A Load is considered
+        connected to Node if either load.vin or load.vout is the Node
+        '''
+        self.connections = [item for item in load_list \
+        if item.vin == self or item.vout == self]
+
+    def getloadsum(self):
+        ''' module retreives the sum of the inverse imdedances connected to Node'''
+        inversedata = [1.0/ item.impedance for item in self.connections]
+        self.loadsum = sum(inversedata)
+
+    def get_equation(self , node_list):
+        '''Module accepts dictionary of all Nodes and sets the attribute
+        ".equation" for the selected Node. '''
+        equ_list = list()
+        equ_list.append((self.name , self.loadsum))
+        for load in self.connections:
+            if load.vout != node_list[0]:
+                if load.vin != self:
+                    equ_list.append((load.vin.name , (-1.0 / load.impedance)))
+                else:
+                    equ_list.append((load.vout.name , (-1.0 / load.impedance)))
+            else:
+                pass
+        for i in range(len(node_list)-2):
+            self.equation.append(0)
+        for i in equ_list:
+            x , y = i
+            if x != 'sub':
+                self.equation[(int(x)-1)] = y
+
+class Load():
+    '''Object represents a physical load or impedance of the feeder
+    Attributes:
+    Voltage in - Node object on substation side of load
+    Voltage out - Node object on the opposite side of sub station
+    impedance - impedance of load
+    current - current passing through the Load
+    power - power consumed by load'''
+
+    def __init__(self , impedance , vin , vout):
+        '''vin and vout are Node objects, impedance is a complex number'''
+        self.impedance = impedance
+        self.vin = vin
+        self.vout = vout
+
+    def get_info(self):
+        '''Module assignes the .impedance and .power attributes'''
+        self.current = (self.vin.voltage - self.vout.voltage) \
+         / self.impedance
+        self.power = (self.current**2) * (self.impedance)
+
+def get_nodes(file):
+    '''function reads a text file that describes the feeder to be
+    evaluated. A Node Object is created for each node of the feeder'''
+    node_list = dict()
+    feeder = open('/python27/capstone/'+file , 'r')
+    for line in feeder:
+        if 'Number of Nodes' in line:
+            numberofnodes = int(line.split(':')[-1])
+            for i in range(numberofnodes+1):
+                node_list[i] = Node(i)
+        elif 'Substation Voltage' in line:
+            node_list['sub'] = Node('sub')
+            node_list['sub'].voltage = complex(line.split(':')[-1])
+        elif 'Load to first Node' in line:
+            impedance = line.split(':')[-1]
+            node_list['sub'].impedance = complex(impedance.split(',')[0])
+        else:
+            pass
+    feeder.close()
+    return node_list
+
+def get_loads(file , node_list):
+    '''function reads text file that describes feeder to be evaluated
+    as well as the disctionary of Node Objectes and creates Load objects
+    for each load of the feeder. '''
+    x = list()
+    feeder = open('/python27/capstone/'+file , 'r')
+    for line in feeder:
+        if 'Load:' in line:
+            info = line.split(':')[-1]
+            data = info.split(',')
+            x.append(Load(complex(data[0]), node_list[complex(data[1])] , node_list[complex(data[2])]))
+        elif 'Load to first Node' in line:
+            info = line.split(':')[-1]
+            data = info.split(',')
+            x.append(Load(complex(data[0]), node_list[data[1]] , node_list[complex(data[2])]))
+        else:
+            pass
+    feeder.close()
+    return x
+
+def get_array(file, node_list):
+    '''function creates a 1 by X array where X is the number of Node
+    objects. The numbers are determined by the Sub station voltage and
+    the PV current added.'''
+    x = list()
+    for i in range(len(node_list)-2): #creates an array of zeros
+        x.append(0)
+    x[0] = node_list['sub'].voltage / node_list['sub'].impedance
+    feeder = open('/python27/capstone/'+file , 'r')
+    for line in feeder: #replaces a zero with PV value if needed
+        if 'PV on Node' in line:
+            data = line.split(':')[-1]
+            data = data.split(',')
+            if data[0] == '1':
+                x[0] = x[0] + complex(data[1])
+            else:
+                x[int(data[0])-1] = complex(data[1])
+        else:
+            pass
+    feeder.close()
+    return x
+
+def build_equations(file , node_list):
+    '''function builds matrix array from each Node objects .equation attribute
+    then returns an array of Node voltages'''
+    equation_list = list()
+    for i in range(len(node_list)-2):
+        equation_list.append(node_list[i+1].equation)
+    test = get_array(file , node_list)
+    a = np.array(equation_list)
+    b = np.array(test)
+    x = np.linalg.solve(a,b)
+    return x
+
+def get_voltage(node_list , voltages):
+    '''function converts array of voltages and assignes the .voltage attribute
+    to each Node object'''
+    x = voltages.tolist()
+    for i in range((len(node_list)-2)):
+            node_list[i+1].voltage = x[i]
+
+def get_results(node_list , load_list , file , excelname):
+    '''Function writes results to excel spreadsheet'''
+    book = xlwt.Workbook(encoding='utf-8')
+    sheet1 = book.add_sheet('Sheet 1')
+    sheet1.write(0, 0, 'Node')
+    sheet1.write(0, 1, 'Voltage')
+    sheet1.write(0, 2, 'Angle')
+    
+    for i , node in enumerate(node_list):
+        sheet1.write(i+1, 0, node_list[node].name)
+        sheet1.write(i+1, 1 , cmath.polar(node_list[node].voltage)[0])
+        sheet1.write(i+1, 2 , math.degrees(cmath.polar(node_list[node].voltage)[1]))
+
+    feeder = open('/python27/capstone/'+file , 'r')
+    for line in feeder:
+        if 'Number of Nodes' in line:
+            x = int(line.split(':')[-1]) + 5
+        else:
+            pass
+    feeder.close()
+    sheet1.write(x, 0, 'Load')
+    sheet1.write(x, 1, 'Current')
+    sheet1.write(x, 2, 'Angle')
+    sheet1.write(x, 3, 'Power')
+    sheet1.write(x, 4, 'Angle')
+    for i , load in enumerate(load_list):
+        load.get_info()
+        sheet1.write(i+x+1, 0, load.vin.name+load.vout.name)
+        sheet1.write(i+x+1, 1 , cmath.polar(load.current)[0])
+        sheet1.write(i+x+1, 2 , math.degrees(cmath.polar(load.current)[1]))
+        sheet1.write(i+x+1, 3 , cmath.polar(load.power)[0])
+        sheet1.write(i+x+1, 4 , math.degrees(cmath.polar(load.power)[1]))
+
+        
+    book.save(excelname)
+
+def main():
+    file = raw_input('Please enter the file for the feeder: ')
+    name = raw_input('please enter the name for the results file: ')
+    excelname = name+'.xls'
+    node_list = get_nodes(file)
+    load_list = get_loads(file , node_list)
+    for k in node_list:
+        x = node_list[k]
+        x.get_connections(load_list)
+        x.getloadsum()
+        x.get_equation(node_list)
+    voltages = build_equations(file , node_list)
+    get_voltage(node_list , voltages)
+    get_results(node_list , load_list , file , excelname )
+
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())
