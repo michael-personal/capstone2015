@@ -57,7 +57,7 @@ class Loads():
 
     def calc_load(self, number_of_nodes):
         """
-        return a dictionary that contains the load value by node in complex
+        return a dictionary that contains the load value by node, if multiple laterals, use parallel impedance formula
         """
         n = 1
         while n <= number_of_nodes+1:
