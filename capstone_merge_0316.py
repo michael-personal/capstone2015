@@ -1,5 +1,6 @@
 """
 capstone_team_10
+assume accdb file is in c:/capstone/
 """
 #import sys
 import numpy as np
@@ -90,7 +91,7 @@ def get_nodes(file):
     '''function reads a text file that describes the feeder to be
     evaluated. A Node Object is created for each node of the feeder'''
     node_dict = dict()
-    feeder = open('/Users/mliu5715k/Downloads/'+file, 'r')
+    feeder = open(file, 'r')
     for line in feeder:
         if 'Number of Nodes' in line:
             numberofnodes = int(line.split(':')[-1])
@@ -112,7 +113,7 @@ def get_loads(file, node_dict):
     '''function reads feeder txt file and Node_dict and creates Load objects
     for each load of the feeder. For conductors, it gets impedance data from accdb'''
     x = list()
-    feeder = open('/Users/mliu5715k/Downloads/'+file, 'r')
+    feeder = open(file, 'r')
     for line in feeder:
         if 'Load:' in line:
             info = line.split(':')[-1]
@@ -128,18 +129,15 @@ def get_loads(file, node_dict):
                 pypyodbc.lowercase = False
                 conn = pypyodbc.connect(
                 r"Driver={Microsoft Access Driver (*.mdb, *.accdb)};" +
-                r"Dbq=C:\Users\mliu\conductors.accdb;")
+                r"Dbq=C:\capstone\conductors.accdb;")
                 cur = conn.cursor()
                 cur.execute ("SELECT %s, %s FROM %s WHERE ConductorName = %r" %(col1, col2, tabl, conductor_name))
                 # impd is a list of one tuple
                 impd=cur.fetchall()
-                print "impd: ",impd
                 real = impd[0][0]
                 imag = impd[0][1]
                 a=complex(real,imag)*float(data[1])
-                print "a:", a
                 x.append(Load(a,node_dict[int(data[2].strip())], node_dict[int(data[3].strip())]))
-                print "x_4: ",x
                 cur.close()
                 conn.close()
 
@@ -165,7 +163,7 @@ def get_array(file, node_dict):
     for i in range(len(node_dict)-2): #creates an array of zeros
         x.append(0)
     x[0] = node_dict['sub'].voltage / node_dict['sub'].impedance
-    feeder = open('/Users/mliu5715k/Downloads/'+file, 'r')
+    feeder = open(file, 'r')
     for line in feeder: #replaces a zero with PV value if needed
         if 'PV on Node' in line:
             data = line.split(':')[-1]
@@ -212,7 +210,7 @@ def get_results(node_dict, load_list, file, excelname):
         sheet1.write(i+1, 1, cmath.polar(node_dict[node].voltage)[0])
         sheet1.write(i+1, 2, math.degrees(cmath.polar(node_dict[node].voltage)[1]))
 
-    feeder = open('/Users/mliu5715k/Downloads/'+file, 'r')
+    feeder = open(file, 'r')
     for line in feeder:
         if 'Number of Nodes' in line:
             x = int(line.split(':')[-1]) + 5
@@ -236,7 +234,7 @@ def get_results(node_dict, load_list, file, excelname):
     book.save(excelname)
 
 def main():
-    file = raw_input('Please enter the file for the feeder: ')
+    file = raw_input('Please enter the file for the feeder, e.g. c:/capstone/test.txt: ')
     name = raw_input('please enter the name for the results file: ')
     excelname = name+'.xls'
     node_dict = get_nodes(file)
