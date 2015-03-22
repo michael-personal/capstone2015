@@ -1,14 +1,16 @@
 """
-capstone_team_10
+capstone_team_10 test
 assume accdb file is in c:/capstone/
 """
-#import sys
+
+import sys
 import numpy as np
 import cmath
 import math
 import xlwt
 import pypyodbc
-class Node(object):
+
+class Node():
     '''Node represents a physical node of the feeder.
     attributes:
     Voltage - Voltage of node
@@ -19,52 +21,47 @@ class Node(object):
     equation - the mathmatical representation of Node derived from
     kirchoffs current law.'''
 
-    def __init__(self, number):
+    def __init__(self , number):
         self.connections = list()
         self.loadsum = 0.0
         self.name = str(number)
         self.equation = list()
         self.voltage = 0
 
-    def get_connections(self, load_list):
+    def get_connections(self , load_list):
         '''module iterates through load_list and creates a list
         containing all Load objects connected to Node. A Load is considered
         connected to Node if either load.vin or load.vout is the Node
         '''
         self.connections = [item for item in load_list \
         if item.vin == self or item.vout == self]
-        print "self.connections: ", self.connections
 
     def getloadsum(self):
         ''' module retreives the sum of the inverse imdedances connected to Node'''
         inversedata = [1.0/ item.impedance for item in self.connections]
         self.loadsum = sum(inversedata)
-        print "self.loadsum", self.loadsum
 
-    def get_equation(self, node_dict):
+    def get_equation(self , node_dict):
         '''Module accepts dictionary of all Nodes and sets the attribute
         ".equation" for the selected Node. '''
         equ_list = list()
-        equ_list.append((self.name, self.loadsum))
-        print "equ_listbegin: ", "node: ", self.name, equ_list
+        equ_list.append((self.name , self.loadsum))
         for load in self.connections:
             if load.vout != node_dict[0]:
                 if load.vin != self:
-                    equ_list.append((load.vin.name, (-1.0 / load.impedance)))
+                    equ_list.append((load.vin.name , (-1.0 / load.impedance)))
                 else:
-                    equ_list.append((load.vout.name, (-1.0 / load.impedance)))
+                    equ_list.append((load.vout.name , (-1.0 / load.impedance)))
             else:
                 pass
-        print "equ_list_mid:", equ_list
         for i in range(len(node_dict)-2):
             self.equation.append(0)
         for i in equ_list:
             x , y = i
             if x != 'sub':
                 self.equation[(int(x)-1)] = y
-        print "end, self.equation:", self.equation
 
-class Load(object):
+class Load():
     '''Object represents a physical load or impedance of the feeder
     Attributes:
     Voltage in - Node object on substation side of load
@@ -73,14 +70,14 @@ class Load(object):
     current - current passing through the Load
     power - power consumed by load'''
 
-    def __init__(self, impedance, vin, vout):
+    def __init__(self , impedance , vin , vout , tag = 'n' , ratio = 1):
         '''vin and vout are Node objects, impedance is a complex number'''
-        self.impedance = impedance
         self.vin = vin
         self.vout = vout
-        self.current = complex
-        self.power = complex 
-
+        self.transformer = tag
+        self.ratio = ratio
+        self.impedance = impedance
+        
     def get_info(self):
         '''Module assignes the .impedance and .power attributes'''
         self.current = (self.vin.voltage - self.vout.voltage) \
@@ -91,7 +88,7 @@ def get_nodes(file):
     '''function reads a text file that describes the feeder to be
     evaluated. A Node Object is created for each node of the feeder'''
     node_dict = dict()
-    feeder = open(file, 'r')
+    feeder = open('/python27/capstone/'+file , 'r')
     for line in feeder:
         if 'Number of Nodes' in line:
             numberofnodes = int(line.split(':')[-1])
@@ -106,7 +103,6 @@ def get_nodes(file):
         else:
             pass
     feeder.close()
-    print "node_dict: ", node_dict
     return node_dict
 
 def get_loads(file, node_dict):
@@ -140,7 +136,6 @@ def get_loads(file, node_dict):
                 x.append(Load(a,node_dict[int(data[2].strip())], node_dict[int(data[3].strip())]))
                 cur.close()
                 conn.close()
-
             else:
                 print "hey your feeder load data is incorrect, check number of fields"
         elif 'Load to first Node' in line:
@@ -153,8 +148,6 @@ def get_loads(file, node_dict):
     print "x: ",x
     return x
 
-    
-
 def get_array(file, node_dict):
     '''function creates a 1 by X array where X is the number of Node
     objects. The numbers are determined by the Sub station voltage and
@@ -163,54 +156,75 @@ def get_array(file, node_dict):
     for i in range(len(node_dict)-2): #creates an array of zeros
         x.append(0)
     x[0] = node_dict['sub'].voltage / node_dict['sub'].impedance
-    feeder = open(file, 'r')
+    feeder = open('/python27/capstone/'+file , 'r')
     for line in feeder: #replaces a zero with PV value if needed
         if 'PV on Node' in line:
             data = line.split(':')[-1]
             data = data.split(',')
             if data[0] == '1':
-                x[0] = x[0] + complex(data[1])
+                x[0] = x[0] + (complex(data[1])*1000)/complex(node_dict['sub'].voltage)
             else:
-                x[int(data[0])-1] = complex(data[1])
+                x[int(data[0])-1] = (complex(data[1])*1000)/complex(node_dict['sub'].voltage)
         else:
             pass
     feeder.close()
     return x
 
-def build_equations(file, node_dict):
+def build_equations(file , node_dict , sim , data):
     '''function builds matrix array from each Node objects .equation attribute
     then returns an array of Node voltages'''
     equation_list = list()
     for i in range(len(node_dict)-2):
         equation_list.append(node_dict[i+1].equation)
-    print "build_equations_equation_list", equation_list
-    test = get_array(file, node_dict)
+    test = get_array(file , node_dict)
     a = np.array(equation_list)
     b = np.array(test)
     x = np.linalg.solve(a,b)
-    return x
+    if sim == '2':
+        z = x.tolist()
+        noansi_violation = all(abs(i) < abs(node_dict['sub'].voltage) for i in z)
+        while noansi_violation == True:
+            if test[data - 1] == 0:
+                test[data - 1] = 1
+            else:
+                test[data - 1] += 0.1
+            b = np.array(test)
+            x = np.linalg.solve(a,b)
+            z = x.tolist()
+            noansi_violation = all(abs(i) < abs(node_dict['sub'].voltage) for i in z)
+            
+    return x , test
+            
 
-def get_voltage(node_dict, voltages):
+def get_voltage(node_dict , voltages):
     '''function converts array of voltages and assignes the .voltage attribute
     to each Node object'''
     x = voltages.tolist()
     for i in range((len(node_dict)-2)):
-        node_dict[i+1].voltage = x[i]
+            node_dict[i+1].voltage = x[i]
 
-def get_results(node_dict, load_list, file, excelname):
+def get_results(node_dict , load_list , file , excelname , pv):
     '''Function writes results to excel spreadsheet'''
     book = xlwt.Workbook(encoding='utf-8')
     sheet1 = book.add_sheet('Sheet 1')
     sheet1.write(0, 0, 'Node')
     sheet1.write(0, 1, 'Voltage')
     sheet1.write(0, 2, 'Angle')
+    sheet1.write(0, 3, 'PV(kw)')
     
-    for i, node in enumerate(node_dict):
+    for i , node in enumerate(node_dict):
         sheet1.write(i+1, 0, node_dict[node].name)
-        sheet1.write(i+1, 1, cmath.polar(node_dict[node].voltage)[0])
-        sheet1.write(i+1, 2, math.degrees(cmath.polar(node_dict[node].voltage)[1]))
+        sheet1.write(i+1, 1 , cmath.polar(node_dict[node].voltage)[0])
+        sheet1.write(i+1, 2 , math.degrees(cmath.polar(node_dict[node].voltage)[1]))
+        if node == 0 or node == 'sub':
+            x = 0
+        elif node_dict[node].name == '1':
+            x = pv[int(node_dict[node].name)-1] - node_dict['sub'].voltage/node_dict['sub'].impedance
+        else:
+            x = pv[int(node_dict[node].name)-1]
+        sheet1.write(i+1, 3 , ((cmath.polar(node_dict['sub'].voltage)[0])*cmath.polar(x)[0])/1000)
 
-    feeder = open(file, 'r')
+    feeder = open('/python27/capstone/'+file , 'r')
     for line in feeder:
         if 'Number of Nodes' in line:
             x = int(line.split(':')[-1]) + 5
@@ -222,36 +236,58 @@ def get_results(node_dict, load_list, file, excelname):
     sheet1.write(x, 2, 'Angle')
     sheet1.write(x, 3, 'Power')
     sheet1.write(x, 4, 'Angle')
-    for i, load in enumerate(load_list):
+    for i , load in enumerate(load_list):
         load.get_info()
-        sheet1.write(i+x+1, 0, load.vin.name+load.vout.name)
-        sheet1.write(i+x+1, 1, cmath.polar(load.current)[0])
-        sheet1.write(i+x+1, 2, math.degrees(cmath.polar(load.current)[1]))
-        sheet1.write(i+x+1, 3, cmath.polar(load.power)[0])
-        sheet1.write(i+x+1, 4, math.degrees(cmath.polar(load.power)[1]))
+        sheet1.write(i+x+1, 0, 'Z'+load.vin.name+load.vout.name)
+        sheet1.write(i+x+1, 1 , cmath.polar(load.current)[0])
+        sheet1.write(i+x+1, 2 , math.degrees(cmath.polar(load.current)[1]))
+        sheet1.write(i+x+1, 3 , cmath.polar(load.power)[0])
+        sheet1.write(i+x+1, 4 , math.degrees(cmath.polar(load.power)[1]))
 
         
     book.save(excelname)
 
+def get_sim():
+    x = 'start'
+    while x != 'done':
+        print 'Select [1] to run single simulation.'
+        print 'Select [2] to an iterated simulation.'
+        sim = raw_input('Select: ')
+        if sim == '2':
+            data = get_data()
+            x = 'done'
+        elif sim == '1':
+            data = 'none'
+            x = 'done'
+        else:
+            x = 'error'
+            print 'please select either [1] or [2]'
+    return sim , data
+
+def get_data():
+    print 'In this simulation select the Node in which to inject PV'
+    print 'in increasing amounts until the ANSI standard is violated'
+    pvnode = int(raw_input("which node's PV will be increased? "))    
+    return pvnode
+
 def main():
-    file = raw_input('Please enter the file for the feeder, e.g. c:/capstone/test.txt: ')
+    file = raw_input('Please enter the file for the feeder: ')
     name = raw_input('please enter the name for the results file: ')
     excelname = name+'.xls'
+    sim , data = get_sim()
     node_dict = get_nodes(file)
-    print "node_dict_dictionary: ", node_dict
-    load_list = get_loads(file, node_dict)
-    print "load_list: ", load_list
+    load_list = get_loads(file , node_dict)
     for k in node_dict:
         x = node_dict[k]
-        print "node_dict[k]: ", x
         x.get_connections(load_list)
         x.getloadsum()
         x.get_equation(node_dict)
-    voltages = build_equations(file, node_dict)
-    get_voltage(node_dict, voltages)
-    get_results(node_dict, load_list, file, excelname)
-
+    voltages , pv = build_equations(file , node_dict , sim ,data)
+    get_voltage(node_dict , voltages)
+    get_results(node_dict , load_list , file , excelname , pv)
+        
     return 0
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
+
